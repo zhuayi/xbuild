@@ -1,0 +1,151 @@
+#!/usr/bin/php -q 
+<?php
+
+class xcodeBuild  {
+
+    public $workspace;
+    
+    public $scheme;
+
+    public $appMacro;
+
+    public $output;
+
+    public $channel;
+
+    public $certificate;
+
+    public $version;
+
+    public $infoPath;
+
+    public $xcodeproj;
+
+    function __construct() {
+
+        global $argv;
+
+        if (!is_file($argv[1])) {
+            exit("配置文件出错!\n");
+        }
+
+        $options = file_get_contents($argv[1]);
+        $options = json_decode($options, true);
+
+        $this->workspace = $options['workspace'];
+        $this->scheme = $options['scheme'];
+        $this->appMacro = $options['AppMacro'];
+        $this->output = './output/';
+        $this->channel = $options['channel'];
+        $this->certificate = $options['certificate'];
+        $this->version = $argv[2];
+        $this->infoPath = $options['infoPath'];
+        $this->xcodeproj = $options['xcodeproj'];
+    }
+
+    public function exec($value) {
+        passthru($value, $reset);
+        if ($reset == 1) {
+            die("编译失败.\n");
+        }
+        return $reset;
+    }
+
+    // 更新pod
+    public function updateCocoapods() {
+        
+        $shell = "pod update --no-repo-update --verbose";
+        $this->exec($shell);
+        return $this;
+    }
+
+    public function clean() {
+
+        $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} clean | xcpretty;";
+        $this->exec($shell);
+        return $this;
+    }
+
+    public function bulid() {
+
+        // 当前版本号
+        $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleShortVersionString\" {$this->infoPath};";
+        $this->exec($shell);
+        
+        // 删除文件夹
+        if (!empty($this->output) && is_readable($this->output)) {
+
+            $this->exec('rm -fr '.$this->output);
+        }
+
+        foreach ($this->channel as $channel) {
+           
+            $codesign = $this->certificate[$channel['channelType']]['codesign'];
+            $certificate = $this->certificate[$channel['channelType']]['profile'];
+
+            if ($channel['channelType'] == 'AppStore') {
+
+                $shell = 'sed -i "" "s/#define IS_FORMAL.*/#define IS_FORMAL 1/g" '.$this->appMacro;
+                $this->exec($shell);
+            } else {
+
+                $shell = 'sed -i "" "s/#define IS_FORMAL.*/#define IS_FORMAL 0/g" '.$this->appMacro;
+                $this->exec($shell);
+            }
+
+            $this->replaceData($this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer']);
+
+            $output = $this->output."/{$this->version}/{$channel['channnelName']}/{$channel['channnelName']}";
+            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} -destination generic/platform=iOS archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\" | xcpretty;";
+            
+            $this->exec($shell);
+
+            // 打包
+            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.'  -exportFormat ipa  | xcpretty;';
+            $this->exec($shell);
+
+            // 测试包
+            $this->exec('ipa info '.$output.'.ipa');
+
+            // 保存dsym
+            $this->exec('mv '.$output.'.xcarchive/dSYMs/* '.$this->output."/{$this->version}/{$channel['channnelName']}/");
+            $this->exec('mv '.$output.'.xcarchive/Info.plist '.$this->output."/{$this->version}/{$channel['channnelName']}/");
+            $this->exec('rm -fr '.$output.".xcarchive");
+
+            $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" '.$this->infoPath;
+            $this->exec($shell);
+        }
+        
+        return $this;
+    }
+
+    // 替换资源
+    public function replaceData($bundle_id, $channnelName, $apiServer) {
+
+        // 更改CFBundleVersion
+        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion '.$this->version.'" '.$this->infoPath;
+        $this->exec($shell);
+        
+        // 替换 buildid
+        $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$bundle_id.'\";/g" '.$this->xcodeproj.'/project.pbxproj';
+        $this->exec($shell);
+
+        // 替换渠道
+        $shell = 'sed -i "" "s/kchannelId.*/kchannelId @\"'.$channnelName.'\"/g" '.$this->appMacro;
+        $this->exec($shell);
+
+        // 替换服务器地址
+        $shell = 'sed -i "" "s/kAPI_USER_SERVER.*/kAPI_USER_SERVER @\"'.$apiServer.'\"/g" '.$this->appMacro;
+        $this->exec($shell);
+    }
+
+    public function run() {
+        
+        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" '.$this->infoPath;
+        $this->exec($shell);
+    }
+}
+
+$bulid = new xcodeBuild();
+$bulid->updateCocoapods()->clean()->bulid();
+
