@@ -6,7 +6,7 @@ xbuild是一款自动化多渠道打包工具.
 ## Installation
 
 ```powershell
-curl -sS -O https://raw.githubusercontent.com/zhuayi/xbuild/master/xbuild xbuild
+curl -sS -O https://raw.githubusercontent.com/zhuayi/xbuild/master/xbuild
 
 chmod +x xbuild
 
