@@ -21,6 +21,15 @@ class xcodeBuild  {
 
     public $xcodeproj;
 
+    // 原始bundleID
+    private $originalBundleID;
+
+    // 原始渠道
+    private $originalChannelName;
+
+    // 原始渠道
+    private $originalApiServer;
+
     function __construct() {
 
         global $argv;
@@ -46,6 +55,8 @@ class xcodeBuild  {
     public function exec($value) {
         passthru($value, $reset);
         if ($reset == 1) {
+            // 替换回去
+            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer);
             die("编译失败.\n");
         }
         return $reset;
@@ -66,12 +77,47 @@ class xcodeBuild  {
         return $this;
     }
 
+    public function getOriginalInfo() {
+        // 获取原始BundleID
+        $shell = "cat {$this->xcodeproj}/project.pbxproj | grep -m1 'PRODUCT_BUNDLE_IDENTIFIER' | awk -F ' = ' '{print $2}' | awk -F ';' '{print $1}'";
+        exec($shell, $shellReset);
+        $this->originalBundleID = $shellReset[0];
+        if (empty($this->originalBundleID)) {
+            die("BundleID 获取失败");
+        }
+        unset($shellReset);
+
+        // 获取原始渠道 ID
+        $shell = "cat carloan/Macro/AppMacro.h | grep -m1 'kchannelId'| awk -F '\"' '{print $2}'";
+        exec($shell, $shellReset);
+        $this->originalChannelName = $shellReset[0];
+        if (empty($this->originalChannelName)) {
+            die("原始渠道获取失败");
+        }
+        unset($shellReset);
+
+        $shell = "cat carloan/Macro/AppMacro.h | grep -m1 'kAPI_USER_SERVER'| awk -F '\"' '{print $2}'";
+        exec($shell, $shellReset);
+        $this->originalApiServer = $shellReset[0];
+
+        if (empty($this->originalApiServer)) {
+            die("原始ApiServer获取失败");
+        }
+
+        unset($shellReset);
+
+        return $this;
+    }
+
     public function bulid() {
 
         // 当前版本号
         $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleShortVersionString\" {$this->infoPath};";
         $this->exec($shell);
         
+        // 获取原始资源
+        $this->getOriginalInfo();
+
         // 删除文件夹
         if (!empty($this->output) && is_readable($this->output)) {
 
@@ -93,7 +139,7 @@ class xcodeBuild  {
                 $this->exec($shell);
             }
 
-            $this->replaceData($this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer']);
+            $this->replaceData($this->version, $this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer']);
 
             $output = $this->output."/{$this->version}/{$channel['channnelName']}/{$channel['channnelName']}";
             $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} -destination generic/platform=iOS archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\" | xcpretty;";
@@ -114,16 +160,21 @@ class xcodeBuild  {
 
             $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" '.$this->infoPath;
             $this->exec($shell);
+
+            // 替换回去
+            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer);
         }
         
         return $this;
     }
 
     // 替换资源
-    public function replaceData($bundle_id, $channnelName, $apiServer) {
+    public function replaceData($version, $bundle_id, $channnelName, $apiServer) {
 
+        $apiServer = str_replace('/', '\\\\/', $apiServer);
+       
         // 更改CFBundleVersion
-        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion '.$this->version.'" '.$this->infoPath;
+        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion '.$version.'" '.$this->infoPath;
         $this->exec($shell);
         
         // 替换 buildid
@@ -136,12 +187,6 @@ class xcodeBuild  {
 
         // 替换服务器地址
         $shell = 'sed -i "" "s/kAPI_USER_SERVER.*/kAPI_USER_SERVER @\"'.$apiServer.'\"/g" '.$this->appMacro;
-        $this->exec($shell);
-    }
-
-    public function run() {
-        
-        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" '.$this->infoPath;
         $this->exec($shell);
     }
 }
