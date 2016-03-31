@@ -88,7 +88,7 @@ class xcodeBuild  {
         unset($shellReset);
 
         // 获取原始渠道 ID
-        $shell = "cat carloan/Macro/AppMacro.h | grep -m1 'kchannelId'| awk -F '\"' '{print $2}'";
+        $shell = "cat {$this->appMacro} | grep -m1 'kchannelId'| awk -F '\"' '{print $2}'";
         exec($shell, $shellReset);
         $this->originalChannelName = $shellReset[0];
         if (empty($this->originalChannelName)) {
@@ -96,7 +96,7 @@ class xcodeBuild  {
         }
         unset($shellReset);
 
-        $shell = "cat carloan/Macro/AppMacro.h | grep -m1 'kAPI_USER_SERVER'| awk -F '\"' '{print $2}'";
+        $shell = "cat {$this->appMacro} | grep -m1 'kAPI_USER_SERVER'| awk -F '\"' '{print $2}'";
         exec($shell, $shellReset);
         $this->originalApiServer = $shellReset[0];
 
