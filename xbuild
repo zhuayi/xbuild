@@ -52,7 +52,7 @@ class xcodeBuild  {
         $this->output = './output/';
         $this->channel = $options['channel'];
         $this->certificate = $options['certificate'];
-        $this->version = $argv[2];
+        $this->version = intval($argv[2]);
         $this->infoPath = $options['infoPath'];
         $this->xcodeproj = $options['xcodeproj'];
     }
