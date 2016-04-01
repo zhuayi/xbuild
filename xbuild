@@ -41,6 +41,11 @@ class xcodeBuild  {
         $options = file_get_contents($argv[1]);
         $options = json_decode($options, true);
 
+        if (!is_array($options)) {
+
+            die("json配置文件解析失败");
+        }
+
         $this->workspace = $options['workspace'];
         $this->scheme = $options['scheme'];
         $this->appMacro = $options['AppMacro'];
@@ -90,6 +95,7 @@ class xcodeBuild  {
         // 获取原始渠道 ID
         $shell = "cat {$this->appMacro} | grep -m1 'kchannelId'| awk -F '\"' '{print $2}'";
         exec($shell, $shellReset);
+        
         $this->originalChannelName = $shellReset[0];
         if (empty($this->originalChannelName)) {
             die("原始渠道获取失败");
