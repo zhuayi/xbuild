@@ -153,7 +153,8 @@ class xcodeBuild  {
             $this->exec($shell);
 
             // 打包
-            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.'  -exportFormat ipa  | xcpretty;';
+            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.'  -exportFormat ipa -exportProvisioningProfile '.$this->certificate[$channel['channelType']]['ProvisioningProfile'].' | xcpretty;';
+            
             $this->exec($shell);
 
             // 测试包
