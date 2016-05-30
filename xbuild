@@ -1,6 +1,5 @@
 #!/usr/bin/php -q 
 <?php
-
 class xcodeBuild  {
 
     public $workspace;
@@ -29,6 +28,9 @@ class xcodeBuild  {
 
     // 原始渠道
     private $originalApiServer;
+
+    // project 是个xml 文件
+    private $isXML;
 
     function __construct() {
 
@@ -88,7 +90,15 @@ class xcodeBuild  {
         exec($shell, $shellReset);
         $this->originalBundleID = $shellReset[0];
         if (empty($this->originalBundleID)) {
-            die("BundleID 获取失败");
+
+            // 可能project.pbxproj变成了 XML 文件
+            $file = file_get_contents("{$this->xcodeproj}/project.pbxproj");
+            preg_match('/PRODUCT_BUNDLE_IDENTIFIER<\/key>(.*?)<string>(.*?)<\/string>/s', $file, $shellReset);
+            $this->originalBundleID = $shellReset[2];
+            if (empty($this->originalBundleID)) {
+                die("BundleID 获取失败");
+            }
+            $this->isXML = true;
         }
         unset($shellReset);
 
@@ -185,8 +195,18 @@ class xcodeBuild  {
         $this->exec($shell);
         
         // 替换 buildid
-        $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$bundle_id.'\";/g" '.$this->xcodeproj.'/project.pbxproj';
-        $this->exec($shell);
+        if ($this->isXML) {
+
+            $file = file_get_contents("{$this->xcodeproj}/project.pbxproj");
+            $project_content = preg_replace('/PRODUCT_BUNDLE_IDENTIFIER<\/key>(.*?)<string>(.*?)<\/string>/s', 'PRODUCT_BUNDLE_IDENTIFIER</key>${1}<string>'.$bundle_id.'</string>', $file);
+            file_put_contents($this->xcodeproj.'/project.pbxproj', $project_content);
+
+        } else {
+
+           $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$bundle_id.'\";/g" '.$this->xcodeproj.'/project.pbxproj';
+            $this->exec($shell); 
+        }
+        
 
         // 替换渠道
         $shell = 'sed -i "" "s/kchannelId.*/kchannelId @\"'.$channnelName.'\"/g" '.$this->appMacro;
