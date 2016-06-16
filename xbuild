@@ -66,7 +66,7 @@ class xcodeBuild  {
         passthru($value, $reset);
         if ($reset == 1) {
             // 替换回去
-            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, $this->originalAppName);
+            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, '\$(PRODUCT_NAME)');
             die("编译失败.\n");
         }
         return $reset;
@@ -125,13 +125,6 @@ class xcodeBuild  {
 
         unset($shellReset);
 
-        $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleName\" ".$this->infoPath;
-        exec($shell, $shellReset);
-        $this->originalAppName = $shellReset[0];
-
-        if (empty($this->originalAppName)) {
-            die("原始appName获取失败");
-        }
 
         return $this;
     }
@@ -190,7 +183,7 @@ class xcodeBuild  {
             $this->exec($shell);
 
             // 替换回去
-            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, $this->originalAppName);
+            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, '\$(PRODUCT_NAME)');
         }
         
         return $this;
@@ -231,6 +224,7 @@ class xcodeBuild  {
         if (!empty($appName)) {
 
             $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleName '.$appName.'" '.$this->infoPath;
+            echo $shell;
             $this->exec($shell);
         }
         
