@@ -32,6 +32,9 @@ class xcodeBuild  {
     // project 是个xml 文件
     private $isXML;
 
+    // 原始 appname
+    private $originalAppName;
+
     function __construct() {
 
         global $argv;
@@ -63,7 +66,7 @@ class xcodeBuild  {
         passthru($value, $reset);
         if ($reset == 1) {
             // 替换回去
-            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer);
+            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, $this->originalAppName);
             die("编译失败.\n");
         }
         return $reset;
@@ -122,6 +125,14 @@ class xcodeBuild  {
 
         unset($shellReset);
 
+        $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleName\" ".$this->infoPath;
+        exec($shell, $shellReset);
+        $this->originalAppName = $shellReset[0];
+
+        if (empty($this->originalAppName)) {
+            die("原始appName获取失败");
+        }
+
         return $this;
     }
 
@@ -155,7 +166,7 @@ class xcodeBuild  {
                 $this->exec($shell);
             }
 
-            $this->replaceData($this->version, $this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer']);
+            $this->replaceData($this->version, $this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer'], $channel['appName']);
 
             $output = $this->output."/{$this->version}/{$channel['channnelName']}/{$channel['channnelName']}";
             $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} -destination generic/platform=iOS archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\" | xcpretty;";
@@ -179,14 +190,14 @@ class xcodeBuild  {
             $this->exec($shell);
 
             // 替换回去
-            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer);
+            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, $this->originalAppName);
         }
         
         return $this;
     }
 
     // 替换资源
-    public function replaceData($version, $bundle_id, $channnelName, $apiServer) {
+    public function replaceData($version, $bundle_id, $channnelName, $apiServer, $appName = '') {
 
         $apiServer = str_replace('/', '\\\\/', $apiServer);
        
@@ -215,6 +226,14 @@ class xcodeBuild  {
         // 替换服务器地址
         $shell = 'sed -i "" "s/kAPI_USER_SERVER.*/kAPI_USER_SERVER @\"'.$apiServer.'\"/g" '.$this->appMacro;
         $this->exec($shell);
+
+        // 替换名字
+        if (!empty($appName)) {
+
+            $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleName '.$appName.'" '.$this->infoPath;
+            $this->exec($shell);
+        }
+        
     }
 }
 
