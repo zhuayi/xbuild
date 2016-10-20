@@ -63,6 +63,7 @@ class xcodeBuild  {
     }
 
     public function exec($value) {
+        echo "==========>".$value."===>\n";
         passthru($value, $reset);
         if ($reset == 1) {
             // 替换回去
@@ -82,7 +83,7 @@ class xcodeBuild  {
 
     public function clean() {
 
-        $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} clean | xcpretty;";
+        $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} clean;";
         $this->exec($shell);
         return $this;
     }
@@ -161,13 +162,15 @@ class xcodeBuild  {
 
             $this->replaceData($this->version, $this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer'], $channel['appName']);
 
+            $buildID = $this->certificate[$channel['channelType']]['buildID'];
+            $team = $this->certificate[$channel['channelType']]['TEAM'];
             $output = $this->output."/{$this->version}/{$channel['channnelName']}/{$channel['channnelName']}";
-            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} -destination generic/platform=iOS archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\" | xcpretty;";
+            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} -destination generic/platform=iOS archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\" PROVISIONING_PROFILE_SPECIFIER=\"{$codesign}\" PRODUCT_BUNDLE_IDENTIFIER=\"{$buildID}\" DEVELOPMENT_TEAM=\"{$team}\";";
             
             $this->exec($shell);
 
             // 打包
-            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.'  -exportFormat ipa -exportProvisioningProfile '.$this->certificate[$channel['channelType']]['ProvisioningProfile'].' | xcpretty;';
+            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.'  -exportFormat ipa -exportProvisioningProfile '.$this->certificate[$channel['channelType']]['ProvisioningProfile'].' ;';
             
             $this->exec($shell);
 
@@ -181,7 +184,6 @@ class xcodeBuild  {
 
             $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" '.$this->infoPath;
             $this->exec($shell);
-
             // 替换回去
             $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, '\$(PRODUCT_NAME)');
         }
@@ -199,17 +201,20 @@ class xcodeBuild  {
         $this->exec($shell);
         
         // 替换 buildid
-        if ($this->isXML) {
+        // if ($this->isXML) {
 
-            $file = file_get_contents("{$this->xcodeproj}/project.pbxproj");
-            $project_content = preg_replace('/PRODUCT_BUNDLE_IDENTIFIER<\/key>(.*?)<string>(.*?)<\/string>/s', 'PRODUCT_BUNDLE_IDENTIFIER</key>${1}<string>'.$bundle_id.'</string>', $file);
-            file_put_contents($this->xcodeproj.'/project.pbxproj', $project_content);
+        //     $file = file_get_contents("{$this->xcodeproj}/project.pbxproj");
+        //     $project_content = preg_replace('/PRODUCT_BUNDLE_IDENTIFIER<\/key>(.*?)<string>(.*?)<\/string>/s', 'PRODUCT_BUNDLE_IDENTIFIER</key>${1}<string>'.$bundle_id.'</string>', $file);
 
-        } else {
 
-           $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$bundle_id.'\";/g" '.$this->xcodeproj.'/project.pbxproj';
-            $this->exec($shell); 
-        }
+        //     file_put_contents($this->xcodeproj.'/project.pbxproj', $project_content);
+        //     $this->exec("cat ".$this->xcodeproj.'/project.pbxproj | grep PRODUCT_BUNDLE_IDENTIFIER');
+
+        // } else {
+
+        //    $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$bundle_id.'\";/g" '.$this->xcodeproj.'/project.pbxproj';
+        //     $this->exec($shell); 
+        // }
         
 
         // 替换渠道
@@ -223,7 +228,7 @@ class xcodeBuild  {
         // 替换名字
         if (!empty($appName)) {
 
-            $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleName '.$appName.'" '.$this->infoPath;
+            $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName '.$appName.'" '.$this->infoPath;
             echo $shell;
             $this->exec($shell);
         }
