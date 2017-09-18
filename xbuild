@@ -136,6 +136,10 @@ class xcodeBuild  {
         $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleShortVersionString\" {$this->infoPath};";
         $this->exec($shell);
         
+        if (!is_readable('./exportOptions.plist')) {
+            file_put_contents('./exportOptions.plist', '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>enterprise</string><key>teamID</key><string>P5AV3F77ZY</string></dict></plist>');
+        }
+
         // 获取原始资源
         $this->getOriginalInfo();
 
@@ -147,35 +151,44 @@ class xcodeBuild  {
 
         foreach ($this->channel as $channel) {
            
+
             $codesign = $this->certificate[$channel['channelType']]['codesign'];
             $certificate = $this->certificate[$channel['channelType']]['profile'];
 
             if ($channel['channelType'] == 'AppStore') {
 
                 $shell = 'sed -i "" "s/#define IS_FORMAL.*/#define IS_FORMAL 1/g" '.$this->appMacro;
+                $this->exec('/usr/libexec/PlistBuddy -c "Set :method app-store" ./exportOptions.plist');
                 $this->exec($shell);
             } else {
 
                 $shell = 'sed -i "" "s/#define IS_FORMAL.*/#define IS_FORMAL 0/g" '.$this->appMacro;
+                $this->exec('/usr/libexec/PlistBuddy -c "Set :method enterprise" ./exportOptions.plist');
                 $this->exec($shell);
             }
 
             $this->replaceData($this->version, $this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer'], $channel['appName']);
-
+            
             $buildID = $this->certificate[$channel['channelType']]['buildID'];
             $team = $this->certificate[$channel['channelType']]['TEAM'];
-            $output = $this->output."/{$this->version}/{$channel['channnelName']}/{$channel['channnelName']}";
-            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} -destination generic/platform=iOS archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\" PROVISIONING_PROFILE_SPECIFIER=\"{$codesign}\" PRODUCT_BUNDLE_IDENTIFIER=\"{$buildID}\" DEVELOPMENT_TEAM=\"{$team}\";";
+            $output = $this->output."/{$this->version}/{$channel['channnelName']}";
+
+
+            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme}  archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\"  PRODUCT_BUNDLE_IDENTIFIER=\"{$buildID}\"  -configuration configuration; ";
             
             $this->exec($shell);
+            
+            // 设置exportOptions
+            $this->exec('/usr/libexec/PlistBuddy -c "Set :teamID '.$team.'" ./exportOptions.plist');
 
             // 打包
-            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.'  -exportFormat ipa -exportProvisioningProfile '.$this->certificate[$channel['channelType']]['ProvisioningProfile'].' ;';
+            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.' -exportOptionsPlist ./exportOptions.plist';
             
             $this->exec($shell);
 
             // 测试包
-            $this->exec('ipa info '.$output.'.ipa');
+            $this->exec("mv $output/$this->scheme.ipa $output/".$channel['channnelName'].".ipa");
+            //$this->exec("ipa info $output/".$channel['channnelName'].".ipa");
 
             // 保存dsym
             $this->exec('mv '.$output.'.xcarchive/dSYMs/* '.$this->output."/{$this->version}/{$channel['channnelName']}/");
@@ -229,13 +242,15 @@ class xcodeBuild  {
         if (!empty($appName)) {
 
             $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName '.$appName.'" '.$this->infoPath;
-            echo $shell;
             $this->exec($shell);
         }
+
+        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable '.$channnelName.'" '.$this->infoPath;
+        $this->exec($shell);
         
     }
 }
 
 $bulid = new xcodeBuild();
-$bulid->updateCocoapods()->clean()->bulid();
+$bulid->clean()->bulid();
 
