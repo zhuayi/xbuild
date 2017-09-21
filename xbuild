@@ -173,9 +173,32 @@ class xcodeBuild  {
             $team = $this->certificate[$channel['channelType']]['TEAM'];
             $output = $this->output."/{$this->version}/{$channel['channnelName']}";
 
-
-            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme}  archive -archivePath {$output}.xcarchive CODE_SIGN_IDENTITY=\"{$certificate}\" PROVISIONING_PROFILE=\"{$codesign}\"  PRODUCT_BUNDLE_IDENTIFIER=\"{$buildID}\"  -configuration configuration; ";
+            // 替换 CODE_SIGN_IDENTITY
+            $shell = 'sed -i "" "s/CODE_SIGN_IDENTITY .*/CODE_SIGN_IDENTITY = \"'.$this->certificate[$channel['channelType']]['profile'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
+            $this->exec($shell);
             
+            // 替换 CODE_SIGN_IDENTITY
+            $shell = 'sed -i "" "s/\"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]\".*/\"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]\" = \"'.$this->certificate[$channel['channelType']]['profile'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
+            $this->exec($shell);
+
+            // 替换 CODE_SIGN_IDENTITY
+            $shell = 'sed -i "" "s/PROVISIONING_PROFILE .*/PROVISIONING_PROFILE = \"'.$this->certificate[$channel['channelType']]['codesign'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
+            $this->exec($shell);
+
+            // 替换 ProvisioningProfile
+            $shell = 'sed -i "" "s/PROVISIONING_PROFILE_SPECIFIER .*/PROVISIONING_PROFILE_SPECIFIER = \"'.$this->certificate[$channel['channelType']]['ProvisioningProfile'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
+            $this->exec($shell);
+
+            // 替换 buildID
+            $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$this->certificate[$channel['channelType']]['buildID'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
+            $this->exec($shell);
+
+            // 替换 TeamID
+            $shell = 'sed -i "" "s/DEVELOPMENT_TEAM .*/DEVELOPMENT_TEAM = \"'.$this->certificate[$channel['channelType']]['TEAM'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
+            $this->exec($shell);
+
+            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme}  archive -archivePath {$output}.xcarchive   -configuration release; ";
+
             $this->exec($shell);
             
             // 设置exportOptions
@@ -195,10 +218,8 @@ class xcodeBuild  {
             $this->exec('mv '.$output.'.xcarchive/Info.plist '.$this->output."/{$this->version}/{$channel['channnelName']}/");
             $this->exec('rm -fr '.$output.".xcarchive");
 
-            $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" '.$this->infoPath;
+            $shell = 'git checkout .';
             $this->exec($shell);
-            // 替换回去
-            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, '\$(PRODUCT_NAME)');
         }
         
         return $this;
@@ -213,26 +234,10 @@ class xcodeBuild  {
         $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion '.$version.'" '.$this->infoPath;
         $this->exec($shell);
         
-        // 替换 buildid
-        // if ($this->isXML) {
-
-        //     $file = file_get_contents("{$this->xcodeproj}/project.pbxproj");
-        //     $project_content = preg_replace('/PRODUCT_BUNDLE_IDENTIFIER<\/key>(.*?)<string>(.*?)<\/string>/s', 'PRODUCT_BUNDLE_IDENTIFIER</key>${1}<string>'.$bundle_id.'</string>', $file);
-
-
-        //     file_put_contents($this->xcodeproj.'/project.pbxproj', $project_content);
-        //     $this->exec("cat ".$this->xcodeproj.'/project.pbxproj | grep PRODUCT_BUNDLE_IDENTIFIER');
-
-        // } else {
-
-        //    $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$bundle_id.'\";/g" '.$this->xcodeproj.'/project.pbxproj';
-        //     $this->exec($shell); 
-        // }
-        
+        $shell = 'sed -i "" "s/kchannelId.*/kchannelId @\"'.$channnelName.'\"/g" '.$this->appMacro;
 
         // 替换渠道
-        $shell = 'sed -i "" "s/kchannelId.*/kchannelId @\"'.$channnelName.'\"/g" '.$this->appMacro;
-        $this->exec($shell);
+        
 
         // 替换服务器地址
         $shell = 'sed -i "" "s/kAPI_USER_SERVER.*/kAPI_USER_SERVER @\"'.$apiServer.'\"/g" '.$this->appMacro;
