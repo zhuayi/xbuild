@@ -67,7 +67,7 @@ class xcodeBuild  {
         passthru($value, $reset);
         if ($reset == 1) {
             // 替换回去
-            $this->replaceData(1, $this->originalBundleID, $this->originalChannelName, $this->originalApiServer, '\$(PRODUCT_NAME)');
+            $this->exec('git checkout .');
             die("编译失败.\n");
         }
         return $reset;
@@ -83,8 +83,8 @@ class xcodeBuild  {
 
     public function clean() {
 
-        $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} clean;";
-        $this->exec($shell);
+        // $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme} clean;";
+        // $this->exec($shell);
         return $this;
     }
 
@@ -136,9 +136,9 @@ class xcodeBuild  {
         $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleShortVersionString\" {$this->infoPath};";
         $this->exec($shell);
         
-        if (!is_readable('./exportOptions.plist')) {
+        // if (!is_readable('./exportOptions.plist')) {
             file_put_contents('./exportOptions.plist', '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>enterprise</string><key>teamID</key><string>P5AV3F77ZY</string></dict></plist>');
-        }
+        // }
 
         // 获取原始资源
         $this->getOriginalInfo();
@@ -158,68 +158,72 @@ class xcodeBuild  {
             if ($channel['channelType'] == 'AppStore') {
 
                 $shell = 'sed -i "" "s/#define IS_FORMAL.*/#define IS_FORMAL 1/g" '.$this->appMacro;
-                $this->exec('/usr/libexec/PlistBuddy -c "Set :method app-store" ./exportOptions.plist');
                 $this->exec($shell);
+                $this->exec('/usr/libexec/PlistBuddy -c "Set :method app-store" ./exportOptions.plist');
+
             } else {
 
                 $shell = 'sed -i "" "s/#define IS_FORMAL.*/#define IS_FORMAL 0/g" '.$this->appMacro;
-                $this->exec('/usr/libexec/PlistBuddy -c "Set :method enterprise" ./exportOptions.plist');
                 $this->exec($shell);
+                $this->exec('/usr/libexec/PlistBuddy -c "Set :method enterprise" ./exportOptions.plist');
             }
 
+            // 设置exportOptions
+            $shell = "/usr/libexec/PlistBuddy -c 'Add :provisioningProfiles:".$this->certificate[$channel['channelType']]['buildID']." string ".$this->certificate[$channel['channelType']]['ProvisioningProfile']."' ./exportOptions.plist";
+            $this->exec($shell);
+           
             $this->replaceData($this->version, $this->certificate[$channel['channelType']]['buildID'], $channel['channnelName'], $channel['apiServer'], $channel['appName']);
             
             $buildID = $this->certificate[$channel['channelType']]['buildID'];
             $team = $this->certificate[$channel['channelType']]['TEAM'];
+
             $output = $this->output."/{$this->version}/{$channel['channnelName']}";
 
             // 替换 CODE_SIGN_IDENTITY
             $shell = 'sed -i "" "s/CODE_SIGN_IDENTITY .*/CODE_SIGN_IDENTITY = \"'.$this->certificate[$channel['channelType']]['profile'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
             
-            // 替换 CODE_SIGN_IDENTITY
+            // // 替换 CODE_SIGN_IDENTITY
             $shell = 'sed -i "" "s/\"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]\".*/\"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]\" = \"'.$this->certificate[$channel['channelType']]['profile'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
 
-            // 替换 CODE_SIGN_IDENTITY
+            // // 替换 CODE_SIGN_IDENTITY
             $shell = 'sed -i "" "s/PROVISIONING_PROFILE .*/PROVISIONING_PROFILE = \"'.$this->certificate[$channel['channelType']]['codesign'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
 
-            // 替换 ProvisioningProfile
+            // // 替换 ProvisioningProfile
             $shell = 'sed -i "" "s/PROVISIONING_PROFILE_SPECIFIER .*/PROVISIONING_PROFILE_SPECIFIER = \"'.$this->certificate[$channel['channelType']]['ProvisioningProfile'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
 
-            // 替换 buildID
+            // // 替换 buildID
             $shell = 'sed -i "" "s/PRODUCT_BUNDLE_IDENTIFIER .*/PRODUCT_BUNDLE_IDENTIFIER = \"'.$this->certificate[$channel['channelType']]['buildID'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
 
-            // 替换 TeamID
+            // // 替换 TeamID
             $shell = 'sed -i "" "s/DEVELOPMENT_TEAM .*/DEVELOPMENT_TEAM = \"'.$this->certificate[$channel['channelType']]['TEAM'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
 
-            $shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme}  archive -archivePath {$output}.xcarchive   -configuration release; ";
+            #$shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme}  archive -archivePath {$output}.xcarchive   -configuration release; ";
 
-            $this->exec($shell);
+            #$this->exec($shell);
             
             // 设置exportOptions
-            $this->exec('/usr/libexec/PlistBuddy -c "Set :teamID '.$team.'" ./exportOptions.plist');
+            // $this->exec('/usr/libexec/PlistBuddy -c "Set :teamID '.$team.'" ./exportOptions.plist');
 
-            // 打包
-            $shell = 'xcodebuild -exportArchive -archivePath '.$output.'.xcarchive -exportPath '.$output.' -exportOptionsPlist ./exportOptions.plist';
-            
+            $shell = "fastlane gym --workspace {$this->workspace} --scheme {$this->scheme}  --archive_path {$output}.xcarchive --output_directory {$output} --output_name ".$channel['channnelName'].".ipa --codesigning_identity '".$this->certificate[$channel['channelType']]['profile']."' --export_team_id ".$team." --export_options ./exportOptions.plist";
             $this->exec($shell);
+            
 
             // 测试包
-            $this->exec("mv $output/$this->scheme.ipa $output/".$channel['channnelName'].".ipa");
-            //$this->exec("ipa info $output/".$channel['channnelName'].".ipa");
+            // $this->exec("mv $output/$this->scheme.ipa $output/".$channel['channnelName'].".ipa");
+            $this->exec("ipa info $output/".$channel['channnelName'].".ipa");
 
             // 保存dsym
-            $this->exec('mv '.$output.'.xcarchive/dSYMs/* '.$this->output."/{$this->version}/{$channel['channnelName']}/");
-            $this->exec('mv '.$output.'.xcarchive/Info.plist '.$this->output."/{$this->version}/{$channel['channnelName']}/");
-            $this->exec('rm -fr '.$output.".xcarchive");
+            // $this->exec('mv '.$output.'.xcarchive/dSYMs/* '.$this->output."/{$this->version}/{$channel['channnelName']}/");
+            // $this->exec('mv '.$output.'.xcarchive/Info.plist '.$this->output."/{$this->version}/{$channel['channnelName']}/");
+            // $this->exec('rm -fr '.$output.".xcarchive");
 
-            $shell = 'git checkout .';
-            $this->exec($shell);
+            $this->exec('git checkout .');
         }
         
         return $this;
@@ -233,10 +237,10 @@ class xcodeBuild  {
         // 更改CFBundleVersion
         $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleVersion '.$version.'" '.$this->infoPath;
         $this->exec($shell);
-        
-        $shell = 'sed -i "" "s/kchannelId.*/kchannelId @\"'.$channnelName.'\"/g" '.$this->appMacro;
 
         // 替换渠道
+        $shell = 'sed -i "" "s/kchannelId.*/kchannelId @\"'.$channnelName.'\"/g" '.$this->appMacro;
+        $this->exec($shell);
         
 
         // 替换服务器地址
@@ -250,12 +254,12 @@ class xcodeBuild  {
             $this->exec($shell);
         }
 
-        $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable '.$channnelName.'" '.$this->infoPath;
-        $this->exec($shell);
+        // $shell = '/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable '.$channnelName.'" '.$this->infoPath;
+        // $this->exec($shell);
         
     }
 }
 
 $bulid = new xcodeBuild();
-$bulid->clean()->bulid();
+$bulid->clean()->updateCocoapods()->bulid();
 
