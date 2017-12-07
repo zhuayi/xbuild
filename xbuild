@@ -76,7 +76,7 @@ class xcodeBuild  {
     // 更新pod
     public function updateCocoapods() {
         
-        $shell = "pod update --no-repo-update --verbose";
+        $shell = "pod install --verbose";
         $this->exec($shell);
         return $this;
     }
@@ -135,22 +135,19 @@ class xcodeBuild  {
         // 当前版本号
         $shell = "/usr/libexec/PlistBuddy -c \"print CFBundleShortVersionString\" {$this->infoPath};";
         $this->exec($shell);
-        
-        // if (!is_readable('./exportOptions.plist')) {
-            file_put_contents('./exportOptions.plist', '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>enterprise</string><key>teamID</key><string>P5AV3F77ZY</string></dict></plist>');
-        // }
 
         // 获取原始资源
         $this->getOriginalInfo();
 
         // 删除文件夹
         if (!empty($this->output) && is_readable($this->output)) {
-
             $this->exec('rm -fr '.$this->output);
         }
 
         foreach ($this->channel as $channel) {
-           
+            
+            // 每次打包，重新创建exportOptions.plist
+            file_put_contents('./exportOptions.plist', '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>enterprise</string><key>teamID</key><string>P5AV3F77ZY</string></dict></plist>');
 
             $codesign = $this->certificate[$channel['channelType']]['codesign'];
             $certificate = $this->certificate[$channel['channelType']]['profile'];
@@ -202,6 +199,9 @@ class xcodeBuild  {
             // // 替换 TeamID
             $shell = 'sed -i "" "s/DEVELOPMENT_TEAM .*/DEVELOPMENT_TEAM = \"'.$this->certificate[$channel['channelType']]['TEAM'].'\";/g" '.$this->xcodeproj."/project.pbxproj";
             $this->exec($shell);
+
+	    // update cocoapods
+            $this->updateCocoapods();
 
             #$shell = "xcodebuild -workspace {$this->workspace} -scheme {$this->scheme}  archive -archivePath {$output}.xcarchive   -configuration release; ";
 
@@ -261,5 +261,5 @@ class xcodeBuild  {
 }
 
 $bulid = new xcodeBuild();
-$bulid->clean()->updateCocoapods()->bulid();
+$bulid->clean()->bulid();
 
