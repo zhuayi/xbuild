@@ -210,7 +210,7 @@ class xcodeBuild  {
             // 设置exportOptions
             // $this->exec('/usr/libexec/PlistBuddy -c "Set :teamID '.$team.'" ./exportOptions.plist');
 
-            $shell = "fastlane gym --workspace {$this->workspace} --scheme {$this->scheme}  --archive_path {$output}.xcarchive --output_directory {$output} --output_name ".$channel['channnelName'].".ipa --codesigning_identity '".$this->certificate[$channel['channelType']]['profile']."' --export_team_id ".$team." --export_options ./exportOptions.plist";
+            $shell = "fastlane gym --workspace {$this->workspace} --scheme {$this->scheme}  --archive_path {$output}.xcarchive --output_directory {$output} --output_name ".$channel['channnelName'].".ipa --codesigning_identity '".addslashes($this->certificate[$channel['channelType']]['profile'])."' --export_team_id ".$team." --export_options ./exportOptions.plist";
             $this->exec($shell);
             
 
