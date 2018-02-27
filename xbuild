@@ -75,7 +75,8 @@ class xcodeBuild  {
 
     // 更新pod
     public function updateCocoapods() {
-        
+	$shell = "rm Podfile.lock";
+	$this->exec($shell);      
         $shell = "pod install --verbose";
         $this->exec($shell);
         return $this;
